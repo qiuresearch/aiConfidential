@@ -1,9 +1,9 @@
 # aiConfidential
-Artifical physical biology to advance deep learning (DL) approaches for biological problems and beyond
+Artifical physical biology to solve biological problems with deep learning (DL) and to elucidate deep learning mechanics with biological systems.
 
 ## Projects
-1. Synthetic artificial biology: Simulate hypothetical biological systems to safetly test DL capabilities and edge cases away from the real world
-2. Experimental DL Physics: Design "biological experiments" to probe DL performance, generalization, and privacy
+1. Experimental Biophysics of Deep Learning: Design "biological experiments" to probe DL performance, generalization, and privacy
+2. Synthetic artificial biology: Simulate hypothetical biological systems to test DL capabilities and edge cases away from the real world
 3. Physics directed artificial biology: Infuse natural laws to data-driven discoveries
 4. Artificial physics: Bring thought experiments into virtual reality
 
@@ -12,6 +12,8 @@ Artifical physical biology to advance deep learning (DL) approaches for biologic
 2. Develop rigorous benchmark datasets, in both synthetic and natural worlds
 3. Develop analytical methods
 4. Introduce various constraints and feedback loops on DL agents
+5. Simulate private stochastic gradient descent with evolutional dynamics in biology. Mutations essentially work as noises. Lead to phylogenetic tree in the end.
+6. How do biological/physical systems preserve privacy? Relaxation, equilibrium?
 
 ## FAQs
 1. Is DL memorization in CV related to image memorability?
