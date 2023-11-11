@@ -1,0 +1,47 @@
+[
+    {
+        "loss_fn": ["softmax+bce"],
+        "learning_rate": 1e-3,
+        "num_epochs": 230,
+        "optim_step_stride": 8,
+        "earlystop_delay": 23,
+        "earlystop_patience": 11,
+        "earlystop_minval": null,
+        "earlystop_mindif": null,
+        "earlystop_minpct": null,
+        "earlystop_maxpct": null,
+        "earlystop_maxval": 0.005,
+        "earlystop_maxdif": 0.001,
+        "earlystop_rubric": ["objgap"]
+    },
+    {
+        "loss_fn": ["softmax+bce"],
+        "learning_rate": 7e-4,
+        "num_epochs": 150,
+        "optim_step_stride": 16,
+        "earlystop_delay": 11,
+        "earlystop_patience": 7,
+        "earlystop_minval": null,
+        "earlystop_mindif": null,
+        "earlystop_minpct": null,
+        "earlystop_maxpct": null,        
+        "earlystop_maxval": 0.01,
+        "earlystop_maxdif": 0.002,
+        "earlystop_rubric": ["objgap"]        
+    },
+    {
+        "loss_fn": ["softmax+fscore"],
+        "learning_rate": 1e-4,
+        "num_epochs": 70,
+        "optim_step_stride": 4,
+        "earlystop_delay": 7,
+        "earlystop_patience": 5,
+        "earlystop_minval": null,
+        "earlystop_mindif": null,
+        "earlystop_minpct": null,
+        "earlystop_maxpct": null,        
+        "earlystop_maxval": null,
+        "earlystop_maxdif": 0.002,
+        "earlystop_rubric": ["validobj"]        
+    }      
+]

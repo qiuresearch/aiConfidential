@@ -1,0 +1,33 @@
+[
+    {
+        "loss_fn": ["softmax+bce"],
+        "learning_rate": 1e-3,
+        "num_epochs": 150,
+        "optim_step_stride": 8
+    },
+    {
+        "loss_fn": ["softmax+bce"],
+        "learning_rate": 7e-4,
+        "num_epochs": 150,
+        "optim_step_stride": 16
+    },
+    {
+        "loss_fn": ["softmax+fscore"],
+        "learning_rate": 1e-4,
+        "num_epochs": 70,
+        "optim_step_stride": 16
+    },
+    {
+        "loss_fn": ["softmax+fscore_bpp"],
+        "learning_rate": 1e-4,
+        "num_epochs": 60,
+        "optim_step_stride": 32
+    },
+    {
+        "loss_fn": ["softmax+fscore_bpp"],
+        "learning_rate": 1e-4,
+        "num_epochs": 50,
+        "optim_step_stride": 64,
+        "lr_cooldn_steps": 7
+    }          
+]
