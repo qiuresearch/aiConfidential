@@ -1,9 +1,10 @@
 # aiConfidential
-Artifical physical biology to elucidate deep learning mechanics with biological systems.
+Artifical physical biology to elucidate deep learning mechanics with physical theories and biological processes.
 
 ## Projects
-1. Experimental Biophysics of Deep Learning: Design "biological experiments" to probe DL performance, generalization, safety, and privacy
-2. Artificial Biological Intelligence: Simulate hypothetical biological systems to test DL capabilities and edge cases away from the real world
+1. Statistical Mechanics of Neural Networks: Predictive behaviors of stochastic networks
+2. Experimental Biophysics of Deep Learning: Design "biological experiments" to probe DL performance, generalization, safety, and privacy
+3. Artificial Biological Intelligence: Simulate hypothetical biological systems to test DL capabilities and edge cases away from the real world
 
 ## Ideas
 1. Estimate privacy score based on data distributions/similarities of the training data, rather than inferences drawn from post-attack scenarios
