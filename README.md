@@ -2,7 +2,7 @@
 Artifical physical biology to elucidate deep learning mechanics with biological systems.
 
 ## Projects
-1. Experimental Biophysics of Deep Learning: Design "biological experiments" to probe DL performance, generalization, and privacy
+1. Experimental Biophysics of Deep Learning: Design "biological experiments" to probe DL performance, generalization, safety, and privacy
 2. Synthetic Artificial Biology: Simulate hypothetical biological systems to test DL capabilities and edge cases away from the real world
 3. Physics Directed Artificial Biology: Infuse natural laws to data-driven discoveries
 4. Artificial physics: Bring thought experiments into virtual reality
@@ -12,17 +12,18 @@ Artifical physical biology to elucidate deep learning mechanics with biological 
    * inversion of pairwise distance matrices?
    * 
 2. Develop rigorous benchmark datasets, in both synthetic and natural worlds
-3. Develop analytical methods
+3. Develop relevant data analytic methods and model evaluation metrics
 4. Introduce various constraints and feedback loops on DL agents
 5. Simulate private stochastic gradient descent with evolutional dynamics in biology. Mutations essentially work as noises. Lead to phylogenetic tree in the end.
-6. How do biological/physical systems preserve privacy? Relaxation, equilibrium?
+6. How do biological/physical systems preserve privacy? By relaxation, permutation, equilibrium?
 7. Membership inference and reconstruction attacks
    1. define relative susceptibility based on distributions/neighborhoods
-   2. a way to find and remove outliers
+   2. implement as such for biological systems
+   3. a way to cluster data, find and remove outliers
 8. Invariant performance regardless of upsampling, stratificatoin, etc., suggesting the commonalities among data are first learned, and the rest is largely memorziation that has little generalization power
 9. remove one cluster from training data has little effect on other clusters, this is very different from the onion effect where peripheral data points are removed
-   1.  origniating from distinct privacy influence function?
-10. Data poisoning, random noise addition, adn base pair mutations
+   1.  originiating from distinct privacy influence function?
+10. Data poisoning, random noise addition, and base pair mutations
 
 ## FAQs
 1. Is DL memorization in CV related to image memorability?
