@@ -3,9 +3,7 @@ Artifical physical biology to elucidate deep learning mechanics with biological 
 
 ## Projects
 1. Experimental Biophysics of Deep Learning: Design "biological experiments" to probe DL performance, generalization, safety, and privacy
-2. Synthetic Artificial Biology: Simulate hypothetical biological systems to test DL capabilities and edge cases away from the real world
-3. Physics Directed Artificial Biology: Infuse natural laws to data-driven discoveries
-4. Artificial physics: Bring thought experiments into virtual reality
+2. Artificial Biological Intelligence: Simulate hypothetical biological systems to test DL capabilities and edge cases away from the real world
 
 ## Ideas
 1. Estimate privacy score based on data distributions/similarities of the training data, rather than inferences drawn from post-attack scenarios
