@@ -1,3 +1,4 @@
+#%%
 import pandas as pd
 import pickle
 import os
@@ -8,6 +9,456 @@ from scipy.stats import binned_statistic_2d
 from scipy.stats import gaussian_kde
 import seaborn as sns
 import plotly.graph_objects as go
+import glob
+
+
+def collect_rand50_metrics(
+        folder_path=os.path.join(os.path.expanduser('~'), 'bench/aiConfidential/data'),
+        metric='f1',
+        upsample=False):
+    # vl_files = glob.glob('**/*upsample*/*_VL.eval/eval_loss_meta.csv', recursive=True)
+    vl_files = glob.glob(os.path.join(folder_path, '**/*/*_VL.eval/eval_loss_meta.csv'), recursive=True)
+    if upsample:
+        vl_files = [_s for _s in vl_files if 'upsample' in _s]
+    else:
+        vl_files = [_s for _s in vl_files if 'upsample' not in _s]
+    print(f'Number of VL files (upsample={upsample}): {len(vl_files)}')
+
+    # load the first VL file and its corresponding TR file
+    vl_df = pd.read_csv(vl_files[0])
+    tr_df = pd.read_csv(vl_files[0].replace('_VL.eval', '_TR.eval'))
+    meta_df = pd.concat([vl_df, tr_df], ignore_index=True)
+    num_samples = vl_df.shape[0] + tr_df.shape[0]
+    print(f'vl_df shape: {vl_df.shape[0]}; tr_df shape: {tr_df.shape[0]}; num_samples: {num_samples}')
+
+    # get the idx_map
+    idx_all = meta_df['idx'].values
+    meta_df = meta_df.set_index('idx', drop=False)
+    idx2i = np.full(idx_all.max() + 1, -1, dtype=int)
+    idx2i[idx_all] = np.arange(num_samples)
+
+    # group by "moltype" and get the idx list for each group
+    idx_per_moltype ={}
+    for grp, df_grp in meta_df.groupby('moltype'):
+        idx_per_moltype[grp] = df_grp['idx'].values
+
+    metric_values = np.zeros((num_samples, len(vl_files)))
+    vl_isa = np.zeros((num_samples, len(vl_files)))
+    for i, vl_csv in enumerate(vl_files):
+        vl_df = pd.read_csv(vl_csv)
+
+        i2mat = idx2i[vl_df['idx'].values]
+        metric_values[i2mat, i] = vl_df[metric].values
+        vl_isa[i2mat, i] = 1 # 1 if in validation set, 0 if in training set
+        
+        tr_csv = vl_csv.replace('_VL.eval', '_TR.eval')
+        tr_df = pd.read_csv(tr_csv)
+        i2mat = idx2i[tr_df['idx'].values]
+        metric_values[i2mat, i] = tr_df[metric].values
+
+    meta_df['vl_avg'] = np.sum(metric_values * vl_isa, axis=1) / np.sum(vl_isa, axis=1)
+    meta_df['tr_avg'] = np.sum(metric_values * (1 - vl_isa), axis=1) / np.sum(1 - vl_isa, axis=1)
+
+    meta_df['mem_score'] = (meta_df['tr_avg'] - meta_df['vl_avg'])
+    meta_df['mem_score_normalized'] = meta_df['mem_score'] / (meta_df['tr_avg'] + meta_df['vl_avg'])    
+    
+    tr_isa = 1 - vl_isa
+    influence_ij = np.zeros((len(meta_df), len(meta_df)))
+    for j in range(len(meta_df)):
+        influence_ij[:, j] = np.sum(vl_isa * metric_values[j, :], axis=1) / np.sum(vl_isa * (metric_values[j, :] > 0), axis=1) -\
+                             np.sum(tr_isa * metric_values[j, :], axis=1) / np.sum(tr_isa * (metric_values[j, :] > 0), axis=1)
+
+    # the code below takes too much memroy
+    # tr_isa = 1 - vl_isa
+    # vl_ijk = vl_isa[:, None, :] * f1_mat[None, :, :]
+    # tr_ijk = tr_isa[:, None, :] * f1_mat[None, :, :]
+    # influence_ij = np.sum(vl_ijk, axis=2) / np.sum(vl_isa[:, None, :], axis=2) -\
+    #                np.sum(tr_ijk, axis=2) / np.sum(tr_isa[:, None, :], axis=2)
+
+    return meta_df, metric_values, vl_isa, influence_ij, idx_per_moltype
+
+#%%
+os.chdir('/home/xqiu/bench/aiConfidential')
+
+meta_df, ts_values, vl_isa, influence_ij, tr_idx_by_moltype = collect_rand50_metrics()
+
+#%%
+# meta_df.to_pickle('meta_df_rand50.pkl')
+import glance_midat
+import importlib
+importlib.reload(glance_midat)
+#%%
+glance_midat.violin_df_groupby(meta_df, split_input=meta_df, groupby='moltype',
+                               y='tr_avg', split_y='vl_avg',
+                               title='Distribution of TR and VL F1 scores by moltype',
+                               xlabel='Moltype', ylabel='F1 score',
+                               title_font_size=23, 
+                               save_prefix='meta_df_rand50', img_width=1400)
+
+#%%
+glance_midat.violin_df_groupby(meta_df[meta_df['tr_avg'] > 0.], 
+                               split_input=meta_df[meta_df['tr_avg'] > 0.], 
+                               groupby='moltype',
+                               y='mem_score_normalized', split_y='mem_score',
+                               title='Distribution of memorization scores by moltype',
+                               xlabel='Moltype', ylabel='Mem. score',
+                               title_font_size=23, 
+                               save_prefix='meta_df_rand50_all', img_width=1400)
+
+#%%
+glance_midat.violin_df_groupby(meta_df[meta_df['tr_avg'] > 0.8], 
+                               split_input=meta_df[meta_df['tr_avg'] > 0.8], 
+                               groupby='moltype',
+                               y='mem_score_normalized', split_y='mem_score',
+                               title='Distribution of memorization scores by moltype (tr_avg > 0.8)',
+                               xlabel='Moltype', ylabel='Mem. score',
+                               title_font_size=23, 
+                               save_prefix='meta_df_rand50_high', img_width=1400)
+
+
+#%%
+
+# def collect_loo_metrics(
+#         folder_path=os.path.join(os.path.expanduser('~'), 'bench/contarna/seq2ct_loo'),
+#         metric='f1',
+#         upsample=False):
+
+folder_path=os.path.join(os.path.expanduser('~'), 'bench/contarna/seq2ct_loo')
+metric='f1'
+upsample=False
+
+ts_files = glob.glob(os.path.join(folder_path, 'strive.libset_len30-600_nr80_train-valid.l4c64.validobj.loo*/*_test.eval/eval_loss_meta.csv'), recursive=True)
+if upsample:
+    ts_files = [_s for _s in ts_files if 'upsample' in _s]
+else:
+    ts_files = [_s for _s in ts_files if 'upsample' not in _s]
+print(f'Number of test files (upsample={upsample}): {len(ts_files)}')
+
+#%%
+# load the first VL file and its corresponding TR file
+ts_df0 = pd.read_csv(ts_files[0])
+tr_df0 = pd.read_csv(ts_files[0].replace('_test.eval', '_train-valid.eval'))
+#%%
+
+def collate_sort_df(df, metric='moltype', ascending=False):
+    """ collate each group of the metric and sort by the number of samples in each group"""
+
+    df_grps = []
+    grp_sizes = []
+    grp_names = []
+    for grp, df_grp in df.groupby(metric):
+        grp_names.append(grp)
+        grp_sizes.append(df_grp.shape[0])
+        df_grps.append(df_grp)
+
+    if ascending:
+        sorted_idx = np.argsort(grp_sizes)
+    else:
+        sorted_idx = np.argsort(grp_sizes)[::-1]
+
+    df = pd.concat([df_grps[i] for i in sorted_idx], ignore_index=True)
+    grp_sizes = [grp_sizes[i] for i in sorted_idx]
+    grp_names = [grp_names[i] for i in sorted_idx]
+
+    return df, grp_sizes, grp_names
+
+def get_key2irow(df, key='idx'):
+    """ get the irow to the key in the df"""
+    key_values = df[key].values
+    key2irow = np.full(key_values.max() + 1, -1, dtype=int)
+    key2irow[key_values] = np.arange(df.shape[0])
+    return key2irow
+    
+# group by "moltype" and get the idx list for each group
+
+tr_df0, tr_grp_sizes, tr_grp_names = collate_sort_df(tr_df0)
+tr_df0.set_index('idx', drop=False, inplace=True)
+tr_df0.index.name = 'index'
+idx2irow = get_key2irow(tr_df0, key='idx')
+
+ts_df0, ts_grp_sizes, ts_grp_names = collate_sort_df(ts_df0)
+ts_df0.set_index('idx', drop=False, inplace=True)
+ts_df0.index.name = 'index'
+idx2icol = get_key2irow(ts_df0, key='idx')
+
+#%%
+ts_values = np.zeros((len(tr_df0), len(ts_df0)))
+tr_values = np.zeros((len(tr_df0), len(tr_df0)))
+
+for i, vl_csv in enumerate(ts_files):
+    ts_df = pd.read_csv(vl_csv)
+
+    idx_loo = int(vl_csv.split('/')[-3].split('.')[-1][3:])
+    irow2mat = idx2irow[idx_loo]
+    icol2mat = idx2icol[ts_df['idx'].values]
+    ts_values[irow2mat][icol2mat] = ts_df[metric].values
+    
+    tr_csv = vl_csv.replace('_test.eval', '_train-valid.eval')
+    tr_df = pd.read_csv(tr_csv)
+
+    icol2mat = idx2irow[tr_df['idx'].values]
+    tr_values[irow2mat][icol2mat] = tr_df[metric].values
+
+#%%
+ts_values_sum = np.sum(ts_values, axis=0, keepdims=True)
+influence_tr_ts = (ts_values_sum - ts_values) / (ts_values.shape[0] - 1) - ts_values
+
+# apply the same operation to tr_values
+tr_values_sum = np.sum(tr_values, axis=0, keepdims=True)
+influence_tr_tr = (tr_values_sum - tr_values) / (tr_values.shape[0] - 1) - tr_values
+
+    # return meta_df, metric_values, tr_isa, influence_ij, idx_per_moltype
+#%%
+#%%
+import matplotlib.pyplot as plt
+import numpy as np
+def sizeup_grps(matrix, grp_sizes):
+    """ size up the matrix to match the largest group"""
+    grp_iranges = np.cumsum(grp_sizes)
+    grp_iranges = np.insert(grp_iranges, 0, 0)
+
+    max_size = max(grp_sizes)
+    sizedup_idx = []
+    for i in range(len(grp_sizes)):
+        grp_idx = np.arange(grp_iranges[i], grp_iranges[i+1])
+        num_tiles = np.ceil(max_size / grp_sizes[i])
+        grp_idx = np.repeat(grp_idx, num_tiles)
+        sizedup_idx.extend(grp_idx[:max_size])
+
+    return matrix[sizedup_idx], [max_size] * len(grp_sizes)
+
+#%%
+def plot_pairwise_matrix(matrix, title=None, xlabel='x', ylabel='y',
+                         cmap='magma', # 'gray', 'viridis', 'plasma', 'inferno', 'magma', 'cividis'
+                         row_grp_sizes=None, col_grp_sizes=None,
+                         row_grp_names=None, col_grp_names=None,
+                         vmin=0, vmax=1, sizeup=False,
+                         ):
+
+    # plt.figure(figsize=(10, 10))
+
+    if sizeup:
+        assert row_grp_sizes is not None, "row_grp_sizes must be provided for sizing up data"
+        assert col_grp_sizes is not None, "col_grp_sizes must be provided for sizing up data"
+
+        maxtrix_sizedup, row_grp_sizes = sizeup_grps(matrix, row_grp_sizes)
+        matrix, col_grp_sizes = sizeup_grps(maxtrix_sizedup.T, col_grp_sizes)
+        matrix = matrix.T
+
+    plt.imshow(matrix, cmap=cmap, vmin=vmin, vmax=vmax)
+
+    # plot dashed lines for the group boundaries
+    if row_grp_sizes is not None:
+        row_grp_iranges = np.cumsum(row_grp_sizes)
+        for i in range(len(row_grp_iranges) - 1):
+            plt.axhline(y=row_grp_iranges[i], color='r', linestyle='--', linewidth=0.5)
+        if row_grp_names is not None:
+            row_grp_iranges = np.insert(row_grp_iranges, 0, 0)
+            for i, name in enumerate(row_grp_names):
+                plt.text(-0.5, row_grp_iranges[i] + row_grp_sizes[i] / 2, name, color='r', fontsize=8,
+                        ha='right', va='center', rotation=-45)
+            
+    if col_grp_sizes is not None:
+        col_grp_iranges = np.cumsum(col_grp_sizes)
+        for i in range(len(col_grp_iranges) - 1):
+            plt.axvline(x=col_grp_iranges[i], color='r', linestyle='--', linewidth=0.5)
+        if col_grp_names is not None:
+            col_grp_iranges = np.insert(col_grp_iranges, 0, 0)
+            for i, name in enumerate(col_grp_names):
+                plt.text(col_grp_iranges[i] + col_grp_sizes[i] / 2, -0.5, name, color='r', fontsize=8,
+                        ha='center', va='bottom', rotation=45)
+                plt.text(col_grp_iranges[i] + col_grp_sizes[i] / 2, matrix.shape[0]+0.5, name, color='r', fontsize=8,
+                        ha='center', va='top', rotation=45)
+                
+    # display the mean of each row and col group
+    if row_grp_sizes is not None and col_grp_sizes is not None:
+        for i in range(len(row_grp_sizes)):
+            for j in range(len(col_grp_sizes)):
+                block_data = matrix[row_grp_iranges[i]:row_grp_iranges[i+1], col_grp_iranges[j]:col_grp_iranges[j+1]]
+                plt.text(col_grp_iranges[j] + col_grp_sizes[j] / 2, 
+                         row_grp_iranges[i] + row_grp_sizes[i] / 2,
+                         f'{block_data.mean():.3f}', color='g', fontsize=8,
+                         ha='center', va='center', rotation=0)
+
+    # draw a diagonal line from (0, 0) to (len(tr_df0), len(ts_df0))
+    plt.plot([0, matrix.shape[1]-1], [0, matrix.shape[0]-1], color='r', linestyle='--', linewidth=0.5)
+
+    # disable aspect ratio
+    plt.gca().set_aspect('auto')
+    plt.colorbar()
+    if title: plt.title(title)
+    if xlabel: plt.xlabel(xlabel)
+    if ylabel: plt.ylabel(ylabel)
+    plt.xticks([0, matrix.shape[1]-1], [0, matrix.shape[1]-1])
+    plt.yticks([0, matrix.shape[0]-1], [0, matrix.shape[0]-1])
+    plt.show()
+
+plot_pairwise_matrix(ts_values, title=None, xlabel='Test', ylabel='LOO Model', cmap='gray',
+                    row_grp_sizes=tr_grp_sizes, col_grp_sizes=ts_grp_sizes,
+                    row_grp_names=tr_grp_names, col_grp_names=ts_grp_names,
+                    vmin=0, vmax=0.8, sizeup=True,)
+#%%
+plot_pairwise_matrix(tr_values, title='tr_values', xlabel='Train', ylabel='LOO Model', cmap='gray',
+                    row_grp_sizes=tr_grp_sizes, col_grp_sizes=tr_grp_sizes,
+                    row_grp_names=tr_grp_names, col_grp_names=tr_grp_names,
+                    vmin=0, vmax=1, sizeup=True,)
+
+#%%
+plot_pairwise_matrix(influence_tr_ts, title='influence_tr_ts', xlabel='idx', ylabel='idx', cmap='gray',
+                    row_grp_sizes=tr_grp_sizes, col_grp_sizes=ts_grp_sizes,
+                    row_grp_names=tr_grp_names, col_grp_names=ts_grp_names,
+                    vmin=0, vmax=0.2, sizeup=True,)
+#%%
+
+# Create a figure with multiple subplots
+fig, axes = plt.subplots(len(tr_idx_by_moltype), len(ts_idx_by_moltype), figsize=(15, 15), sharex=False, sharey=False)
+fig.suptitle('Influence vs Similarity for Each Pair of Groups')
+
+# Iterate over each pair of groups
+for i, (grp_i, idx_i) in enumerate(tr_idx_by_moltype.items()):
+    idx_i = idx2irow[idx_i]
+    for j, (grp_j, idx_j) in enumerate(ts_idx_by_moltype.items()):
+        idx_j = idx2icol[idx_j]
+        ax = axes[i, j]
+        ax.set_title(f'{grp_i} vs {grp_j}', fontsize=8)
+
+        sim_mat = influence_tr_ts[idx_i, :][:, idx_j]
+        influence_mat = influence_ij[idx_i, :][:, idx_j]
+
+        # show the sim_mat as image
+        ax.imshow(sim_mat)#, vmin=0, vmax=1)
+        ax.set_xlim(-0.5, sim_mat.shape[1] - 0.5)
+        ax.set_ylim(-0.5, sim_mat.shape[0] - 0.5)
+
+        # disable aspect ratio
+        ax.set_aspect('auto')
+
+        # # Scatter plot for the current pair of groups
+        # sim_values = sim_mat.flatten()
+        # influence_values = influence_mat.flatten()
+        # ax.scatter(sim_values, influence_values, s=0.5)
+        # ax.set_xlim(0, 1.1)
+        # ax.set_ylim(-0.45, 0.45)
+        # # show a horizontal line at the average of influence_mat and a vertical line at the average of sim_mat
+
+        # idx_ij = np.where(sim_values < 0.99)[0]
+        # sim_mean = sim_values[idx_ij].mean()
+        # influence_mean = abs(influence_values[idx_ij]).mean()
+        # ax.axhline(y=influence_mean, color='r', linestyle='--', linewidth=0.5)
+        # ax.axvline(x=sim_mean, color='r', linestyle='--', linewidth=0.5)
+        # # annotate the average values
+        # ax.text(0.5, 0.9, f'Mean sim: {sim_mean:.2f}', fontsize=6, ha='center', va='center', transform=ax.transAxes)
+        # ax.text(0.5, 0.8, f'Mean influence: {influence_mean:.2f}', fontsize=6, ha='center', va='center', transform=ax.transAxes)
+
+        if i == len(tr_idx_by_moltype) - 1:
+            ax.set_xlabel(grp_j)
+        if j == 0:
+            ax.set_ylabel(grp_i)
+# add colorbar
+        # cbar = plt.colorbar(ax.imshow(sim_mat), ax=ax)
+
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.show()
+
+
+#%%
+# load the pairwise similarity matrix
+from glance_midat import bake_pairwise_df
+sim_df = pd.read_pickle('data/nr80-vs-nr80.rnaforester.alnIdentity_pairwise.pkl')
+pairwise_mat, pairwise_ids, irows_with_NaNs = bake_pairwise_df(sim_df,
+            square_dataframe=False,
+            diagonal=1.0, 
+            diagonal_nan=1.0,
+            nan=None,
+            conjugate_to_nan=True, 
+            symmetric_nan=None,
+            symmetrize=True,
+            save_mat=False, 
+            save_pkl=False)
+#%%
+# count the number of nans in parwise_mat
+num_nans = np.isnan(pairwise_mat).sum()
+print(f'Number of NaNs in pairwise_mat: {num_nans}')
+#%%
+sim_df.index = [int(s.split('_')[0]) for s in sim_df.index]
+sim_df.columns = [int(s.split('_')[0]) for s in sim_df.columns]
+idx_rows = idx_map[sim_df.index]
+idx_rows = idx_rows[idx_rows >= 0]
+idx_cols = idx_map[sim_df.columns]
+idx_cols = idx_cols[idx_cols >= 0]
+sim_ij = sim_df.values[idx_rows, :][:, idx_cols]
+
+# # scatter plot of influence_ij vs. sim_ij with matplotlib
+# import matplotlib.pyplot as plt
+# plt.scatter(np.tril(sim_ij).flatten(), np.tril(influence_ij).flatten(), s=1)
+# plt.xlabel('sim_ij')
+# plt.ylabel('influence_ij')
+# plt.show()
+
+sim_triu = sim_ij[np.triu_indices(sim_ij.shape[0], k=1)]
+influence_triu = influence_ij[np.triu_indices(influence_ij.shape[0], k=1)]
+# scatter plot of influence_triu vs. sim_triu
+plt.scatter(sim_triu, influence_triu, s=1)
+plt.xlabel('sim_ij')
+plt.ylabel('influence_ij')
+plt.show()
+
+#%%
+# sample 10000 pairs of samples and plot again
+import random
+idx_pairs = random.sample(range(sim_triu.shape[0]), 10000)
+plt.scatter(sim_triu[idx_pairs], influence_triu[idx_pairs], s=1)
+plt.xlabel('sim_ij')
+plt.ylabel('influence_ij')
+plt.show()
+
+#%%
+import matplotlib.pyplot as plt
+
+# Create a figure with multiple subplots
+fig, axes = plt.subplots(len(idx_list_per_group), len(idx_list_per_group), figsize=(15, 15), sharex=False, sharey=False)
+fig.suptitle('Influence vs Similarity for Each Pair of Groups')
+
+# Iterate over each pair of groups
+for i, (grp_i, idx_i) in enumerate(idx_list_per_group.items()):
+    idx_i = idx_map[idx_i]
+    for j, (grp_j, idx_j) in enumerate(idx_list_per_group.items()):
+        idx_j = idx_map[idx_j]
+        ax = axes[i, j]
+        ax.set_title(f'{grp_i} vs {grp_j}', fontsize=8)
+
+        sim_mat = sim_ij[idx_i, :][:, idx_j]
+        influence_mat = influence_ij[idx_i, :][:, idx_j]
+
+        # show the sim_mat as image
+        ax.imshow(sim_mat, cmap='gray', vmin=0, vmax=1)
+        ax.set_xlim(-0.5, sim_mat.shape[1] - 0.5)
+        ax.set_ylim(-0.5, sim_mat.shape[0] - 0.5)
+
+        # # Scatter plot for the current pair of groups
+        # sim_values = sim_mat.flatten()
+        # influence_values = influence_mat.flatten()
+        # ax.scatter(sim_values, influence_values, s=0.5)
+        # ax.set_xlim(0, 1.1)
+        # ax.set_ylim(-0.45, 0.45)
+        # # show a horizontal line at the average of influence_mat and a vertical line at the average of sim_mat
+
+        # idx_ij = np.where(sim_values < 0.99)[0]
+        # sim_mean = sim_values[idx_ij].mean()
+        # influence_mean = abs(influence_values[idx_ij]).mean()
+        # ax.axhline(y=influence_mean, color='r', linestyle='--', linewidth=0.5)
+        # ax.axvline(x=sim_mean, color='r', linestyle='--', linewidth=0.5)
+        # # annotate the average values
+        # ax.text(0.5, 0.9, f'Mean sim: {sim_mean:.2f}', fontsize=6, ha='center', va='center', transform=ax.transAxes)
+        # ax.text(0.5, 0.8, f'Mean influence: {influence_mean:.2f}', fontsize=6, ha='center', va='center', transform=ax.transAxes)
+
+        if i == len(idx_list_per_group) - 1:
+            ax.set_xlabel('sim_ij')
+        if j == 0:
+            ax.set_ylabel('influence_ij')
+
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+plt.show()
 
 
 #----------------Extracting all main data for import (not upsampled) ------------------
@@ -31,9 +482,9 @@ for root, dirs, files in os.walk(data_path):
                 except:
                     print(f'Error reading {file_path}')
                 
-tr_df = pd.concat(tr_data, ignore_index=True)
+tr_df0 = pd.concat(tr_data, ignore_index=True)
 vl_df = pd.concat(vl_data, ignore_index=True)
-tr_avg_f1 = tr_df.groupby(['idx', 'moltype'])['f1'].mean().reset_index() #Keeping moltype column
+tr_avg_f1 = tr_df0.groupby(['idx', 'moltype'])['f1'].mean().reset_index() #Keeping moltype column
 tr_avg_f1.rename(columns={'f1': 'tr_avg_f1'}, inplace=True)
 vl_avg_f1 = vl_df.groupby(['idx'])['f1'].mean().reset_index()
 vl_avg_f1.rename(columns={'f1': 'vl_avg_f1'}, inplace=True)
